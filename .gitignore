@@ -30,6 +30,7 @@ go.work.sum
 # OpenSpec (local spec-driven workflow artifacts; not part of the codebase)
 openspec/
 .openspec/
+.zcode/
 
 # Editor/IDE
 # .idea/
