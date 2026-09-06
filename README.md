@@ -16,7 +16,7 @@
 
 Miyano (ミヤノ) es una aplicación móvil **offline-first** para crear y seguir rutinas de ejercicio en cualquier lugar y momento, con o sin equipo. Nace como proyecto personal para **aprender de verdad** tecnologías nuevas (foco en **Go**) mientras construyo algo útil para mí mismo.
 
-> **Nombre:** *Miyano* (ミヤノ). Si no sabes leer katakana... 🤷🏼 que se jodan.
+> **Nombre:** *Miyano* (ミヤノ).
 
 ## 🧰 Stack
 
