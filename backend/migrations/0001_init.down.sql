@@ -1,0 +1,10 @@
+DROP TABLE IF EXISTS user_fitness_profile;
+DROP TABLE IF EXISTS fitness_levels;
+DROP TABLE IF EXISTS routine_tags;
+DROP TABLE IF EXISTS routine_exercises;
+DROP TABLE IF EXISTS routines;
+DROP TABLE IF EXISTS user_equipment;
+DROP TABLE IF EXISTS exercise_translations;
+DROP TABLE IF EXISTS exercises;
+DROP TABLE IF EXISTS profiles;
+DROP TABLE IF EXISTS users;
