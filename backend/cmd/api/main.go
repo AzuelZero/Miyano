@@ -6,12 +6,19 @@ import (
 	"net/http"
 	"time"
 
+	"miyano/internal/adapter/argon2"
+	"miyano/internal/adapter/jwttoken"
 	"miyano/internal/adapter/postgres"
 	"miyano/internal/config"
 	"miyano/internal/ports"
 	"miyano/internal/service"
 	transport "miyano/internal/transport/http"
 	"miyano/internal/transport/http/handler"
+)
+
+const (
+	accessTokenTTL  = 15 * time.Minute
+	refreshTokenTTL = 7 * 24 * time.Hour
 )
 
 func main() {
@@ -29,9 +36,16 @@ func main() {
 	var exerciseRepo ports.ExerciseRepository = postgres.NewExerciseRepository(pool)
 	exerciseSvc := service.NewExerciseService(exerciseRepo)
 
+	var (
+		hasher  ports.PasswordHasher     = argon2.NewHasher()
+		tokens  ports.TokenGenerator     = jwttoken.NewGenerator(cfg.JWTSecret, accessTokenTTL, refreshTokenTTL)
+		userRepo ports.UserAuthRepository = postgres.NewUserAuthRepository(pool)
+	)
+	authSvc := service.NewAuthService(userRepo, hasher, tokens)
+
 	srv := &http.Server{
 		Addr:         ":" + cfg.Port,
-		Handler:      transport.NewRouter(transport.Handlers{Health: handler.Health(), Exercises: handler.NewExerciseHandler(exerciseSvc)}),
+		Handler:      transport.NewRouter(transport.Handlers{Health: handler.Health(), Exercises: handler.NewExerciseHandler(exerciseSvc), Auth: handler.NewAuthHandler(authSvc), Verifier: tokens}),
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
 	}

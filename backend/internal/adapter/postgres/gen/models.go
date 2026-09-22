@@ -45,7 +45,7 @@ type FitnessLevel struct {
 }
 
 type Profile struct {
-	UserID          pgtype.UUID
+	UserID          string
 	DisplayName     string
 	Bio             *string
 	AvatarUrl       *string
@@ -56,16 +56,25 @@ type Profile struct {
 	UpdatedAt       pgtype.Timestamptz
 }
 
+type RefreshToken struct {
+	ID        string
+	UserID    string
+	TokenHash string
+	ExpiresAt pgtype.Timestamptz
+	RevokedAt pgtype.Timestamptz
+	CreatedAt pgtype.Timestamptz
+}
+
 type Routine struct {
-	ID          pgtype.UUID
-	UserID      pgtype.UUID
+	ID          string
+	UserID      string
 	Name        string
 	Description *string
 	CreatedAt   pgtype.Timestamptz
 }
 
 type RoutineExercise struct {
-	RoutineID       pgtype.UUID
+	RoutineID       string
 	ExerciseID      string
 	Position        int32
 	TargetSets      *int32
@@ -75,12 +84,12 @@ type RoutineExercise struct {
 }
 
 type RoutineTag struct {
-	RoutineID pgtype.UUID
+	RoutineID string
 	Tag       string
 }
 
 type User struct {
-	ID           pgtype.UUID
+	ID           string
 	Email        string
 	PasswordHash string
 	DisplayName  *string
@@ -89,12 +98,12 @@ type User struct {
 }
 
 type UserEquipment struct {
-	UserID    pgtype.UUID
+	UserID    string
 	Equipment string
 }
 
 type UserFitnessProfile struct {
-	UserID         pgtype.UUID
+	UserID         string
 	FitnessLevelID string
 	Goal           *string
 	UpdatedAt      pgtype.Timestamptz

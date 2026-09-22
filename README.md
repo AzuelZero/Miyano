@@ -42,8 +42,10 @@ Arquitectura: **offline-first** (el móvil funciona sin red; sincroniza cuando h
 #    (hoy solo se usa PostgreSQL; Mongo y MinIO quedan definidos para fases futuras)
 docker compose -f docker-compose.dev.yml up -d
 
-# 2. Aplica la migración inicial (tablas + seed de niveles de forma)
-docker compose -f docker-compose.dev.yml exec -T postgres psql -U miyano -d miyano < backend/migrations/0001_init.up.sql
+# 2. Aplica las migraciones (esquema + seed de niveles de forma)
+for f in backend/migrations/*.up.sql; do
+  docker compose -f docker-compose.dev.yml exec -T postgres psql -U miyano -d miyano < "$f"
+done
 
 # 3. Carga el catálogo de ejercicios (1.324, ES/EN) — idempotente
 #    descarga el dataset en el primer arranque (download-at-deploy, ver NOTICE.md)
@@ -51,13 +53,14 @@ cd backend
 export DATABASE_URL=postgres://miyano:dev@localhost:5432/miyano
 go run ./cmd/importer
 
-# 4. Arranca la API en :8080
+# 4. Arranca la API en :8080 (JWT_SECRET: >= 32 caracteres, fail-fast)
+export JWT_SECRET="dev-secret-change-me-32-chars-min!"
 go run ./cmd/api
 ```
 
 > **PowerShell:** el paso 2 equivale a
 > `Get-Content backend/migrations/0001_init.up.sql | docker compose -f docker-compose.dev.yml exec -T postgres psql -U miyano -d miyano`
-> y el `export` del paso 3 a `$env:DATABASE_URL = "postgres://miyano:dev@localhost:5432/miyano"`.
+> y los `export` a `$env:DATABASE_URL = "postgres://miyano:dev@localhost:5432/miyano"` y `$env:JWT_SECRET = "dev-secret-change-me-32-chars-min!"`.
 
 ### 🩺 Healthcheck
 
@@ -65,19 +68,25 @@ go run ./cmd/api
 
 ### 📚 Endpoints actuales
 
-Públicos provisionalmente: se protegen con la Lección de Auth (JWT).
+Autenticación con JWT: `POST /api/v1/auth/register` devuelve el par de tokens; el catálogo requiere `Authorization: Bearer <access_token>`.
 
 | Método | Ruta | Descripción |
 |---|---|---|
 | GET | `/api/v1/health` | Estado del servicio |
-| GET | `/api/v1/exercises` | Catálogo (filtro exacto `?equipment=body weight`) |
-| GET | `/api/v1/exercises/{id}` | Detalle con traducciones ES/EN |
+| POST | `/api/v1/auth/register` | Registro (email + password ≥8 + display_name) → tokens |
+| POST | `/api/v1/auth/login` | Login → access (15 min) + refresh (7 días) |
+| POST | `/api/v1/auth/refresh` | Rotación de refresh token |
+| GET | `/api/v1/exercises` | 🔒 Catálogo (filtro exacto `?equipment=body weight`) |
+| GET | `/api/v1/exercises/{id}` | 🔒 Detalle con traducciones ES/EN |
+
+Los endpoints `/auth/*` están limitados a 5 peticiones/minuto por IP. Las passwords se guardan hasheadas con argon2id (RFC 9106) y los refresh tokens persisten hasheados (SHA-256) para poder revocarlos y rotarlos.
 
 ## 🔧 Variables de entorno
 
 | Variable | Obligatoria | Por defecto | Descripción |
 |---|---|---|---|
 | `DATABASE_URL` | ✅ | — | Cadena de conexión PostgreSQL (p. ej. `postgres://miyano:dev@localhost:5432/miyano`) |
+| `JWT_SECRET` | ✅ | — | Secreto de firma HS256 (≥ 32 caracteres) |
 | `PORT` | — | `8080` | Puerto HTTP de la API |
 
 ## 🧪 Tests
