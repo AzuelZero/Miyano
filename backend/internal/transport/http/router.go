@@ -19,6 +19,7 @@ type Handlers struct {
 	Health    http.HandlerFunc
 	Exercises *handler.ExerciseHandler
 	Auth      *handler.AuthHandler
+	Routines  *handler.RoutineHandler
 	// Verifier authenticates the protected group (JWT access tokens).
 	Verifier ports.TokenVerifier
 }
@@ -48,8 +49,18 @@ func NewRouter(h Handlers) *chi.Mux {
 
 		r.Group(func(r chi.Router) {
 			r.Use(appmiddleware.RequireAuth(h.Verifier))
+
 			r.Get("/exercises", h.Exercises.List)
 			r.Get("/exercises/{id}", h.Exercises.GetByID)
+
+			r.Get("/me/fitness-level", h.Routines.GetLevel)
+			r.Put("/me/fitness-level", h.Routines.SetLevel)
+
+			r.Post("/routines", h.Routines.Create)
+			r.Get("/routines", h.Routines.List)
+			r.Get("/routines/{id}", h.Routines.Get)
+			r.Put("/routines/{id}", h.Routines.Update)
+			r.Delete("/routines/{id}", h.Routines.Delete)
 		})
 	})
 
