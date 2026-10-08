@@ -37,15 +37,19 @@ func main() {
 	exerciseSvc := service.NewExerciseService(exerciseRepo)
 
 	var (
-		hasher  ports.PasswordHasher     = argon2.NewHasher()
-		tokens  ports.TokenGenerator     = jwttoken.NewGenerator(cfg.JWTSecret, accessTokenTTL, refreshTokenTTL)
-		userRepo ports.UserAuthRepository = postgres.NewUserAuthRepository(pool)
+		hasher   ports.PasswordHasher      = argon2.NewHasher()
+		tokens   ports.TokenGenerator      = jwttoken.NewGenerator(cfg.JWTSecret, accessTokenTTL, refreshTokenTTL)
+		userRepo ports.UserAuthRepository  = postgres.NewUserAuthRepository(pool)
 	)
 	authSvc := service.NewAuthService(userRepo, hasher, tokens)
 
+	routineRepo := postgres.NewRoutineRepository(pool)
+	levelRepo := postgres.NewFitnessLevelRepository(pool)
+	routineSvc := service.NewRoutineService(routineRepo, levelRepo)
+
 	srv := &http.Server{
 		Addr:         ":" + cfg.Port,
-		Handler:      transport.NewRouter(transport.Handlers{Health: handler.Health(), Exercises: handler.NewExerciseHandler(exerciseSvc), Auth: handler.NewAuthHandler(authSvc), Verifier: tokens}),
+		Handler:      transport.NewRouter(transport.Handlers{Health: handler.Health(), Exercises: handler.NewExerciseHandler(exerciseSvc), Auth: handler.NewAuthHandler(authSvc), Routines: handler.NewRoutineHandler(routineSvc), Verifier: tokens}),
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
 	}

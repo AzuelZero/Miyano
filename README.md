@@ -68,7 +68,7 @@ go run ./cmd/api
 
 ### 📚 Endpoints actuales
 
-Autenticación con JWT: `POST /api/v1/auth/register` devuelve el par de tokens; el catálogo requiere `Authorization: Bearer <access_token>`.
+Autenticación con JWT: `POST /api/v1/auth/register` devuelve el par de tokens; todo lo marcado 🔒 requiere `Authorization: Bearer <access_token>`.
 
 | Método | Ruta | Descripción |
 |---|---|---|
@@ -78,8 +78,14 @@ Autenticación con JWT: `POST /api/v1/auth/register` devuelve el par de tokens; 
 | POST | `/api/v1/auth/refresh` | Rotación de refresh token |
 | GET | `/api/v1/exercises` | 🔒 Catálogo (filtro exacto `?equipment=body weight`) |
 | GET | `/api/v1/exercises/{id}` | 🔒 Detalle con traducciones ES/EN |
+| GET/PUT | `/api/v1/me/fitness-level` | 🔒 Nivel de forma (default `beginner`) |
+| POST | `/api/v1/routines` | 🔒 Crear rutina (ejercicios + tags) → detalle con variante escalada |
+| GET | `/api/v1/routines` | 🔒 Mis rutinas (filtro exacto `?tag=`) |
+| GET/PUT/DELETE | `/api/v1/routines/{id}` | 🔒 Detalle (base + escalada) / reemplazo completo / borrado |
 
 Los endpoints `/auth/*` están limitados a 5 peticiones/minuto por IP. Las passwords se guardan hasheadas con argon2id (RFC 9106) y los refresh tokens persisten hasheados (SHA-256) para poder revocarlos y rotarlos.
+
+Las rutinas se sirven con **auto-escala según el nivel de forma** (beginner ×0.70 / intermediate ×1.00 / advanced ×1.30): el detalle incluye la rutina base y el bloque `scaled_exercises` recalculado al vuelo (nunca se guardan variantes), junto con el tiempo total estimado de cada una.
 
 ## 🔧 Variables de entorno
 

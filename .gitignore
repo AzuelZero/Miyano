@@ -35,3 +35,6 @@ openspec/
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Local security-audit note (personal reminder, not repo docs)
+NOTA-AUDITORIA-SEGURIDAD.md
