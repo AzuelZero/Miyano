@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-17T18:30:00+02:00",
+  "title": "Design System: Miyano",
+  "extensions": {
+    "colorMeta": {
+      "primary": { "role": "primary", "displayName": "Azul Haibara", "canonical": "#2F2FE4", "tonalRamp": ["#0d0d4a", "#16167a", "#1f1faa", "#2F2FE4", "#5a5aeb", "#7C7CFF", "#a5a5ff", "#d4d4ff"] },
+      "primary-bright": { "role": "primary", "displayName": "Violeta Reactivo", "canonical": "#7C7CFF" },
+      "secondary": { "role": "secondary", "displayName": "Azul Profundo", "canonical": "#162E93" },
+      "background": { "role": "neutral", "displayName": "Noche de Laboratorio", "canonical": "#080616" },
+      "surface": { "role": "neutral", "displayName": "Superficie de Trabajo", "canonical": "#1A1953" },
+      "text": { "role": "neutral", "displayName": "Pizarra Clara", "canonical": "#E6E8F2" },
+      "muted": { "role": "neutral", "displayName": "Gris de Nota", "canonical": "#9A9FB8" }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Sora", "purpose": "Wordmark y títulos de pantalla." },
+      "body": { "displayName": "Sora", "purpose": "Todo el texto; una sola voz." },
+      "label": { "displayName": "Sora Label", "purpose": "Labels uppercase y metadatos." }
+    },
+    "shadows": [],
+    "motion": [
+      { "name": "ease-standard", "value": "cubic-bezier(0.4, 0, 0.2, 1)", "purpose": "Transiciones de estado (hover/focus) — cortas, 150-200ms." },
+      { "name": "ease-authored", "value": "cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "El único momento autoral por pantalla (entrada post-login)." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Acción principal de la pantalla; táctil y confiado.",
+      "html": "<button class=\"ds-btn-primary\">Entrar</button>",
+      "css": ".ds-btn-primary { background: var(--color-primary, #2F2FE4); color: #fff; font-family: 'Sora Variable', system-ui, sans-serif; font-weight: 600; font-size: 1rem; border: 0; border-radius: 10px; padding: 12px 16px; width: 100%; cursor: pointer; transition: background 0.15s cubic-bezier(0.4,0,0.2,1); } .ds-btn-primary:hover { background: var(--color-primary-bright, #7C7CFF); } .ds-btn-primary:focus-visible { outline: 2px solid var(--color-primary-bright, #7C7CFF); outline-offset: 2px; } .ds-btn-primary:disabled { opacity: 0.55; cursor: not-allowed; }"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input-field",
+      "description": "Input sobre superficie; label uppercase siempre visible encima.",
+      "html": "<div class=\"ds-field\"><label class=\"ds-label\" for=\"e\">Correo</label><input class=\"ds-input\" id=\"e\" type=\"email\" value=\"azuel@example.com\" /></div>",
+      "css": ".ds-label { display: block; font-family: 'Sora Variable', system-ui, sans-serif; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-muted, #9A9FB8); margin: 0 0 6px 2px; } .ds-input { background: var(--color-background, #080616); border: 1px solid rgba(255,255,255,0.14); color: var(--color-text, #E6E8F2); font-family: 'Sora Variable', system-ui, sans-serif; font-size: 1rem; border-radius: 10px; padding: 10px 14px; width: 100%; caret-color: var(--color-primary-bright, #7C7CFF); } .ds-input:focus-visible { outline: 2px solid var(--color-primary-bright, #7C7CFF); outline-offset: 1px; border-color: transparent; }"
+    },
+    {
+      "name": "Surface Card",
+      "kind": "card",
+      "refersTo": "card-surface",
+      "description": "Contenedor elevado por capa tonal, sin sombra (Regla Tonal).",
+      "html": "<div class=\"ds-card\"><h3 class=\"ds-card-title\">Pierna en casa</h3><p class=\"ds-card-nums\">3×12 · 60s · R90</p></div>",
+      "css": ".ds-card { background: var(--color-surface, #1A1953); border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; padding: 24px; color: var(--color-text, #E6E8F2); font-family: 'Sora Variable', system-ui, sans-serif; } .ds-card-title { margin: 0; font-weight: 600; font-size: 1.25rem; } .ds-card-nums { margin: 8px 0 0; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--color-primary-bright, #7C7CFF); }"
+    },
+    {
+      "name": "Bottom Nav Item",
+      "kind": "nav",
+      "refersTo": "nav-item",
+      "description": "Ítem de nav inferior móvil; activo en Violeta Reactivo.",
+      "html": "<nav class=\"ds-nav\"><a class=\"ds-nav-item ds-active\" href=\"#\"><span class=\"ds-nav-ico\">◆</span><span class=\"ds-nav-lbl\">Hoy</span></a><a class=\"ds-nav-item\" href=\"#\"><span class=\"ds-nav-ico\">◇</span><span class=\"ds-nav-lbl\">Rutinas</span></a></nav>",
+      "css": ".ds-nav { display: flex; gap: 8px; background: var(--color-surface, #1A1953); border-top: 1px solid rgba(255,255,255,0.06); padding: 8px; } .ds-nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px; border-radius: 10px; text-decoration: none; color: var(--color-muted, #9A9FB8); font-family: 'Sora Variable', system-ui, sans-serif; } .ds-nav-item.ds-active { color: var(--color-primary-bright, #7C7CFF); } .ds-nav-ico { font-size: 20px; line-height: 1; } .ds-nav-lbl { font-size: 0.72rem; font-weight: 600; letter-spacing: 0.06em; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "El laboratorio de Haibara",
+    "overview": "Miyano es el laboratorio nocturno de una científica: frío y preciso por fuera, cálido por dentro, y TODO se mide. La jerarquía no se grita, se calibra; los números son los protagonistas tipográficos. Componentes táctiles y confiados: rellenos sólidos, feedback inmediato, sólidos bajo dedos sudados de gimnasio.",
+    "keyCharacteristics": [
+      "Dark-first calibrado: tres capas tonales, sin sombras decorativas",
+      "Un acento con dos registros: primario rellena, primary-bright señala",
+      "Sora en todo; dígitos SIEMPRE tabulares",
+      "Un sistema de radius (10/14/pill) y ya",
+      "Copys en español que nombran la acción y la recuperación"
+    ],
+    "rules": [
+      { "name": "La Regla del Relleno y la Señal", "body": "El primario rellena; el primary-bright señala (focus, links, activo). Nunca al revés: el primario puro sobre fondo oscuro no alcanza contraste UI (2.53:1).", "section": "colors" },
+      { "name": "La Regla del Dígito", "body": "Todo número del dominio se renderiza con tabular-nums. Una columna que baila es un bug visual.", "section": "typography" },
+      { "name": "La Regla Tonal", "body": "Profundidad = capa de color, no blur. Si algo necesita parecer encima, sube su capa tonal; no le pongas shadow.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do nombrar la recuperación en cada error (429 → 'Espera un minuto e inténtalo de nuevo').",
+      "Do themear las superficies del navegador (selection, caret, scrollbar, focus).",
+      "Do un solo momento autoral por pantalla, respetando prefers-reduced-motion."
+    ],
+    "donts": [
+      "Don't usar el primario como texto/anillo sobre fondo oscuro — para eso existe primary-bright.",
+      "Don't añadir sombras, glass, gradientes ni border-left decorativos.",
+      "Don't usar emoji como icono — Lucide o nada.",
+      "Don't mostrar un número del dominio sin tabular-nums."
+    ]
+  }
+}
