@@ -1,0 +1,68 @@
+/* Miyano design system — single source of visual truth.
+   Tailwind v4 is CSS-first: these @theme tokens generate utilities
+   (bg-background, text-muted, ring-primary-bright, ...). */
+
+@import "tailwindcss";
+@import "@fontsource-variable/sora";
+
+@theme {
+  /* Palette (ADR D013, dark-first) — AA verified 17/10/2026 */
+  --color-background: #080616; /* base, near-black indigo */
+  --color-surface: #1A1953; /* elevated cards */
+  --color-secondary: #162E93; /* subtle interactive fills */
+  --color-primary: #2F2FE4; /* CTAs — filled surfaces only (white on top: 7.93:1) */
+  --color-primary-bright: #7C7CFF; /* UI accents on dark: focus/links/active (5.90:1 bg, 4.73:1 surface) */
+  --color-text: #E6E8F2; /* 16.4:1 on background */
+  --color-muted: #9A9FB8; /* 7.66:1 on background */
+  --color-danger: #FF7B7B;
+
+  /* Typography — Sora variable, self-hosted (offline-friendly) */
+  --font-display: "Sora Variable", system-ui, sans-serif;
+  --font-sans: "Sora Variable", system-ui, sans-serif;
+
+  /* One radius system, nothing else */
+  --radius-md: 10px; /* inputs, buttons */
+  --radius-lg: 14px; /* cards */
+
+  /* Text scale step for labels (generates the `text-label` utility) */
+  --text-label: 0.72rem;
+  --text-label--line-height: 1.5;
+  --text-label--letter-spacing: 0.08em;
+  --text-label--font-weight: 600;
+}
+
+/* Browser theming — the app owns every surface it can (anti-slop floor) */
+::selection {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+html {
+  color-scheme: dark;
+  scrollbar-color: var(--color-secondary) var(--color-background);
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  caret-color: var(--color-primary-bright);
+  min-height: 100dvh;
+}
+
+/* Numbers are the product: always tabular where digits align */
+input[type="number"],
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Respect users who ask for calm */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

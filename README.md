@@ -100,7 +100,20 @@ Las rutinas se sirven con **auto-escala según el nivel de forma** (beginner ×0
 ```bash
 cd backend
 go test ./...           # tests unitarios y de integración
+
+cd ../frontend
+pnpm test               # Vitest (store de sesión + refresh-retry del API client)
 ```
+
+## 🖥️ Frontend (desarrollo)
+
+```bash
+cd frontend
+pnpm install
+pnpm dev                # http://localhost:5173
+```
+
+Login/registro/Home contra la API local: el proxy `/api` de Vite conecta con `:8080` (arranca la API primero). El sistema de diseño — tokens de la paleta, tipografía Sora y reglas visuales — vive en `frontend/DESIGN.md`.
 
 ## 🏗️ Arquitectura
 
