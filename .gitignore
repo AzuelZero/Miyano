@@ -38,3 +38,6 @@ openspec/
 
 # Local security-audit note (personal reminder, not repo docs)
 NOTA-AUDITORIA-SEGURIDAD.md
+
+# Agent-local artifacts (any tool)
+.opencode/
