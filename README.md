@@ -53,7 +53,10 @@ cd backend
 export DATABASE_URL=postgres://miyano:dev@localhost:5432/miyano
 go run ./cmd/importer
 
-# 4. Arranca la API en :8080 (JWT_SECRET: >= 32 caracteres, fail-fast)
+# 4. Descarga los GIFs/imágenes del catálogo (una vez, ~296 MB) — download-at-deploy (ADR D015)
+pwsh scripts/fetch-media.ps1
+
+# 5. Arranca la API en :8080 (JWT_SECRET: >= 32 caracteres, fail-fast)
 export JWT_SECRET="dev-secret-change-me-32-chars-min!"
 go run ./cmd/api
 ```
@@ -78,6 +81,7 @@ Autenticación con JWT: `POST /api/v1/auth/register` devuelve el par de tokens; 
 | POST | `/api/v1/auth/refresh` | Rotación de refresh token |
 | GET | `/api/v1/exercises` | 🔒 Catálogo (filtro exacto `?equipment=body weight`) |
 | GET | `/api/v1/exercises/{id}` | 🔒 Detalle con traducciones ES/EN |
+| GET | `/media/*` | GIFs e imágenes del catálogo (ficheros estáticos públicos, ADR D015) |
 | GET/PUT | `/api/v1/me/fitness-level` | 🔒 Nivel de forma (default `beginner`) |
 | POST | `/api/v1/routines` | 🔒 Crear rutina (ejercicios + tags) → detalle con variante escalada |
 | GET | `/api/v1/routines` | 🔒 Mis rutinas (filtro exacto `?tag=`) |
