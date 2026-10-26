@@ -31,6 +31,7 @@ type exerciseDTO struct {
 	Difficulty   *string  `json:"difficulty,omitempty"`
 	IsBodyweight bool     `json:"is_bodyweight"`
 	GifURL       *string  `json:"gif_url,omitempty"`
+	ImageURL     *string  `json:"image_url,omitempty"`
 }
 
 type translationDTO struct {
@@ -55,6 +56,7 @@ func toDTO(ex domain.Exercise) exerciseDTO {
 		Difficulty:   ex.Difficulty,
 		IsBodyweight: ex.IsBodyweight,
 		GifURL:       ex.GifURL,
+		ImageURL:     ex.ImageURL,
 	}
 }
 

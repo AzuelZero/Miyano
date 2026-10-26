@@ -27,6 +27,18 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/exercises',
+      name: 'catalog',
+      component: () => import('../views/CatalogView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/exercises/:id',
+      name: 'exercise-detail',
+      component: () => import('../views/ExerciseDetailView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/:pathMatch(.*)*',
       redirect: '/home',
     },

@@ -8,6 +8,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -674,5 +676,43 @@ func TestRouterFitnessLevelDefaultAndSet(t *testing.T) {
 	bad.Body.Close()
 	if bad.StatusCode != http.StatusBadRequest {
 		t.Errorf("unknown level status = %d, want 400", bad.StatusCode)
+	}
+}
+
+func TestRouterMediaGhostFileIs404(t *testing.T) {
+	// No auth header: /media lives outside the JWT group (dataset files).
+	// A missing file must read as a clean 404, never 500.
+	srv := httptest.NewServer(newTestRouter())
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/media/videos/does-not-exist.gif")
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusNotFound)
+	}
+}
+
+func TestRouterMediaServesRealFile(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "0001-test.gif"), []byte("GIF89a"), 0o644); err != nil {
+		t.Fatalf("writing fixture: %v", err)
+	}
+	tokens := jwttoken.NewGenerator(testRouterSecret, 15*time.Minute, 7*24*time.Hour)
+	r := NewRouter(Handlers{MediaDir: dir, Verifier: tokens})
+	srv := httptest.NewServer(r)
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/media/0001-test.gif")
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusOK)
 	}
 }

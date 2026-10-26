@@ -47,9 +47,9 @@ export async function apiFetch(path: string, init: RequestInit = {}, retry = tru
   return response
 }
 
-/** JSON helper: throws ApiError(status, server message) on !ok. */
-export async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await apiFetch(path, init)
+/** JSON helper: throws ApiError(status, server message) on !ok. Pass retry=false for the refresh call itself (a 401 there must not trigger another refresh). */
+export async function apiJson<T>(path: string, init?: RequestInit, retry = true): Promise<T> {
+  const response = await apiFetch(path, init, retry)
   if (!response.ok) {
     let message = `HTTP ${response.status}`
     try {

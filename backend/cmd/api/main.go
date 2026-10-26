@@ -48,8 +48,15 @@ func main() {
 	routineSvc := service.NewRoutineService(routineRepo, levelRepo)
 
 	srv := &http.Server{
-		Addr:         ":" + cfg.Port,
-		Handler:      transport.NewRouter(transport.Handlers{Health: handler.Health(), Exercises: handler.NewExerciseHandler(exerciseSvc), Auth: handler.NewAuthHandler(authSvc), Routines: handler.NewRoutineHandler(routineSvc), Verifier: tokens}),
+		Addr: ":" + cfg.Port,
+		Handler: transport.NewRouter(transport.Handlers{
+			Health:    handler.Health(),
+			Exercises: handler.NewExerciseHandler(exerciseSvc),
+			Auth:      handler.NewAuthHandler(authSvc),
+			Routines:  handler.NewRoutineHandler(routineSvc),
+			Verifier:  tokens,
+			MediaDir:  cfg.MediaDir,
+		}),
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
 	}

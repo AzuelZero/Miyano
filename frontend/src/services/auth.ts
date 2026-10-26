@@ -16,8 +16,12 @@ export async function register(email: string, password: string, displayName: str
 }
 
 export async function refresh(refreshToken: string): Promise<TokenPair> {
-  return apiJson<TokenPair>('/auth/refresh', {
-    method: 'POST',
-    body: JSON.stringify({ refresh_token: refreshToken }),
-  })
+  return apiJson<TokenPair>(
+    '/auth/refresh',
+    {
+      method: 'POST',
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    },
+    false, // never retry the refresh itself: a 401 here IS the answer
+  )
 }

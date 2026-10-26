@@ -38,3 +38,6 @@ openspec/
 
 # Local security-audit note (personal reminder, not repo docs)
 NOTA-AUDITORIA-SEGURIDAD.md
+
+# Exercise-dataset media (download-at-deploy, ADR D015 — never commit: (c) Gym Visual)
+backend/media/

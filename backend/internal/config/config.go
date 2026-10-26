@@ -7,6 +7,7 @@ import "os"
 
 const (
 	defaultPort      = "8080"
+	defaultMediaDir  = "media"
 	minJWTSecretSize = 32
 )
 
@@ -22,6 +23,7 @@ type Config struct {
 	Port        string
 	DatabaseURL string
 	JWTSecret   string
+	MediaDir    string
 }
 
 // Load reads configuration from environment variables, applying sane defaults.
@@ -30,10 +32,15 @@ func Load() Config {
 	if port == "" {
 		port = defaultPort
 	}
+	mediaDir := os.Getenv("MEDIA_DIR")
+	if mediaDir == "" {
+		mediaDir = defaultMediaDir
+	}
 	return Config{
 		Port:        port,
 		DatabaseURL: os.Getenv("DATABASE_URL"),
 		JWTSecret:   os.Getenv("JWT_SECRET"),
+		MediaDir:    mediaDir,
 	}
 }
 
