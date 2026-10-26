@@ -41,16 +41,27 @@ export const useAuthStore = defineStore('auth', () => {
     persist(await authApi.register(email, password, displayName))
   }
 
-  /** One refresh attempt for the api client's 401-retry. Clears session on failure. */
-  async function tryRefresh(): Promise<boolean> {
-    if (!refreshToken.value) return false
-    try {
-      persist(await authApi.refresh(refreshToken.value))
-      return true
-    } catch {
-      clear()
-      return false
-    }
+  // Single-flight: N parallel 401s share ONE refresh call (the others would
+  // use the already-rotated token, fail, and log the user out spuriously).
+  let inFlightRefresh: Promise<boolean> | null = null
+
+  /** One shared refresh attempt for the api client's 401-retry. Clears session on failure. */
+  function tryRefresh(): Promise<boolean> {
+    if (!refreshToken.value) return Promise.resolve(false)
+    inFlightRefresh ??= authApi
+      .refresh(refreshToken.value)
+      .then((pair) => {
+        persist(pair)
+        return true
+      })
+      .catch(() => {
+        clear()
+        return false
+      })
+      .finally(() => {
+        inFlightRefresh = null
+      })
+    return inFlightRefresh
   }
 
   function logout(): void {

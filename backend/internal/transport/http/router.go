@@ -22,6 +22,9 @@ type Handlers struct {
 	Routines  *handler.RoutineHandler
 	// Verifier authenticates the protected group (JWT access tokens).
 	Verifier ports.TokenVerifier
+	// MediaDir serves the cloned exercise-dataset media (download-at-deploy,
+	// ADR D015) at /media/* — public: dataset files, not user data.
+	MediaDir string
 }
 
 // NewRouter builds the application router with the standard middleware stack
@@ -35,6 +38,10 @@ func NewRouter(h Handlers) *chi.Mux {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(30 * time.Second))
+
+	// Exercise-dataset media (GIFs/images), served from the local clone.
+	// Outside the JWT group on purpose: public dataset files, not user data.
+	r.Handle("/media/*", http.StripPrefix("/media/", http.FileServer(http.Dir(h.MediaDir))))
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/health", h.Health)

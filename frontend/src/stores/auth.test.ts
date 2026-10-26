@@ -111,3 +111,38 @@ describe('api client refresh-retry', () => {
     expect(localStorage.getItem('miyano.access')).toBeNull()
   })
 })
+
+describe('api client single-flight refresh', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    setActivePinia(createPinia())
+  })
+  afterEach(() => vi.restoreAllMocks())
+
+  it('two concurrent 401s trigger exactly ONE refresh', async () => {
+    localStorage.setItem('miyano.access', 'access-old')
+    localStorage.setItem('miyano.refresh', 'refresh-old')
+    const store = useAuthStore()
+    // 401, then refresh 200 (new pair), then the two retries succeed.
+    const calls = mockFetch(
+      { status: 401, body: { error: 'missing or invalid token' } },
+      { status: 401, body: { error: 'missing or invalid token' } },
+      { status: 200, body: pair(9) },
+      { status: 200, body: { id: 'beginner' } },
+      { status: 200, body: { id: 'beginner' } },
+    )
+
+    const { apiJson } = await import('../services/api')
+    const [a, b] = await Promise.all([
+      apiJson('/me/fitness-level'),
+      apiJson('/me/fitness-level'),
+    ])
+
+    expect(a).toEqual({ id: 'beginner' })
+    expect(b).toEqual({ id: 'beginner' })
+    const refreshCalls = calls.filter((c) => c.url.includes('/auth/refresh'))
+    expect(refreshCalls).toHaveLength(1) // single flight: ONE rotation for both
+    expect(calls.at(-1)?.headers.authorization).toBe('Bearer access-9')
+    expect(store.isAuthenticated).toBe(true)
+  })
+})
