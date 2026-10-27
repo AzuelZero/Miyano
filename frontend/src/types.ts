@@ -34,3 +34,48 @@ export interface Translation {
 export interface ExerciseDetail extends Exercise {
   translations: Translation[]
 }
+
+export interface RoutineExercise {
+  exercise_id: string
+  position: number
+  target_sets?: number
+  target_reps?: number
+  target_duration_s?: number
+  rest_s?: number
+}
+
+export interface RoutineSummary {
+  id: string
+  name: string
+  description?: string | null
+  tags: string[]
+  exercise_count: number
+  total_time_s: number
+}
+
+export interface RoutineDetail {
+  id: string
+  name: string
+  description?: string | null
+  tags: string[]
+  exercises: RoutineExercise[]
+  level: FitnessLevel
+  scaled_exercises: RoutineExercise[]
+  total_time_s: number
+  total_time_scaled_s: number
+}
+
+export interface RoutineExerciseInput {
+  exercise_id: string
+  target_sets?: number
+  target_reps?: number
+  target_duration_s?: number
+  rest_s?: number
+}
+
+export interface RoutineInput {
+  name: string
+  description?: string
+  exercises: RoutineExerciseInput[]
+  tags: string[]
+}

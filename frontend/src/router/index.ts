@@ -39,6 +39,30 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/routines',
+      name: 'routines',
+      component: () => import('../views/RoutinesView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/routines/new',
+      name: 'routine-new',
+      component: () => import('../views/RoutineEditorView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/routines/:id',
+      name: 'routine-detail',
+      component: () => import('../views/RoutineDetailView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/routines/:id/edit',
+      name: 'routine-edit',
+      component: () => import('../views/RoutineEditorView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/:pathMatch(.*)*',
       redirect: '/home',
     },

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { watch } from 'vue'
-import { Dumbbell, House, LogOut } from 'lucide-vue-next'
+import { ClipboardList, Dumbbell, House, LogOut } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 
@@ -21,6 +21,7 @@ watch(
 
 const navItems = [
   { to: '/home', label: 'Hoy', icon: House },
+  { to: '/routines', label: 'Rutinas', icon: ClipboardList },
   { to: '/exercises', label: 'Catálogo', icon: Dumbbell },
 ]
 
@@ -56,7 +57,7 @@ function logout(): void {
       aria-label="Secciones"
       class="fixed inset-x-0 bottom-0 mx-auto w-full max-w-[640px] border-t border-white/6 bg-surface/95 px-5 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 backdrop-blur"
     >
-      <div class="grid grid-cols-2 gap-2">
+      <div class="grid grid-cols-3 gap-2">
         <RouterLink
           v-for="item in navItems"
           :key="item.to"
