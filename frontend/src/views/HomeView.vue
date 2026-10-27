@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
-import { Dumbbell } from 'lucide-vue-next'
+import { ClipboardList } from 'lucide-vue-next'
 import AppShell from '../components/AppShell.vue'
 import BaseButton from '../components/BaseButton.vue'
 import BaseCard from '../components/BaseCard.vue'
@@ -77,15 +77,20 @@ function animateFactor(): void {
         </p>
       </BaseCard>
 
-      <BaseCard class="flex items-start gap-4">
-        <Dumbbell class="mt-1 size-6 shrink-0 text-primary-bright" aria-hidden="true" />
+      <BaseCard class="flex items-start justify-between gap-4">
         <div>
-          <p class="font-semibold">El catálogo y tus rutinas llegan en la próxima lección</p>
+          <p class="font-semibold">Rutinas</p>
           <p class="mt-1 text-sm leading-relaxed text-muted">
-            1.324 ejercicios con GIFs de técnica y rutinas que se escalan solas ya te esperan
-            en la API — el frontend los consume en el siguiente bloque.
+            Crea rutinas con etiquetas y míralas escaladas a tu nivel.
           </p>
+          <RouterLink
+            to="/routines"
+            class="mt-4 inline-flex w-fit items-center justify-center rounded-md bg-primary px-4 py-2.5 font-semibold text-white transition-colors duration-150 hover:bg-primary-bright focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-bright"
+          >
+            Ver rutinas
+          </RouterLink>
         </div>
+        <ClipboardList class="mt-1 size-6 shrink-0 text-primary-bright" aria-hidden="true" />
       </BaseCard>
     </div>
   </AppShell>
