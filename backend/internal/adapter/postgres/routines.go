@@ -52,6 +52,12 @@ func (r *RoutineRepository) Create(ctx context.Context, userID, name string, des
 	if err != nil {
 		return domain.Routine{}, err
 	}
+	// The profile counter moves in the SAME transaction as the write
+	// (sync contract D1, design decision 3): no committed write with a
+	// stale poll cursor.
+	if err := q.BumpProfileRev(ctx, userID); err != nil {
+		return domain.Routine{}, fmt.Errorf("bumping profile rev: %w", err)
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return domain.Routine{}, fmt.Errorf("committing routine creation: %w", err)
 	}
@@ -62,14 +68,18 @@ func (r *RoutineRepository) Create(ctx context.Context, userID, name string, des
 		Name:        row.Name,
 		Description: row.Description,
 		CreatedAt:   row.CreatedAt.Time,
+		Revision:    row.Revision,
 		Exercises:   stored,
 		Tags:        tags,
 	}, nil
 }
 
 // Update replaces name, description, exercises and tags in one transaction
-// (delete + insert of the body — see add-routines design decision 1).
-func (r *RoutineRepository) Update(ctx context.Context, userID, routineID, name string, description *string, exercises []domain.RoutineExercise, tags []string) (domain.Routine, error) {
+// (delete + insert of the body — see add-routines design decision 1). A
+// non-nil expectedRevision conditions the write: a stale revision returns
+// *ports.ConflictError with the current row attached — never a bare 404,
+// which the naive `AND revision = $n` would produce (sync D1, decision 2).
+func (r *RoutineRepository) Update(ctx context.Context, userID, routineID, name string, description *string, exercises []domain.RoutineExercise, tags []string, expectedRevision *int64) (domain.Routine, error) {
 	if err := r.validateExerciseIDs(ctx, exercises); err != nil {
 		return domain.Routine{}, err
 	}
@@ -81,17 +91,44 @@ func (r *RoutineRepository) Update(ctx context.Context, userID, routineID, name 
 	defer tx.Rollback(ctx)
 
 	q := gen.New(tx)
-	row, err := q.UpdateRoutine(ctx, gen.UpdateRoutineParams{
-		ID:          routineID,
-		Name:        name,
-		Description: description,
-		UserID:      userID,
-	})
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return domain.Routine{}, ports.ErrNotFound
+	var row gen.Routine
+	if expectedRevision == nil {
+		row, err = q.UpdateRoutine(ctx, gen.UpdateRoutineParams{
+			ID:          routineID,
+			Name:        name,
+			Description: description,
+			UserID:      userID,
+		})
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return domain.Routine{}, ports.ErrNotFound
+			}
+			return domain.Routine{}, fmt.Errorf("updating routine: %w", err)
 		}
-		return domain.Routine{}, fmt.Errorf("updating routine: %w", err)
+	} else {
+		n, err := q.UpdateRoutineIfMatch(ctx, gen.UpdateRoutineIfMatchParams{
+			ID:          routineID,
+			Name:        name,
+			Description: description,
+			UserID:      userID,
+			Revision:    *expectedRevision,
+		})
+		if err != nil {
+			return domain.Routine{}, fmt.Errorf("updating routine (if-match): %w", err)
+		}
+		if n == 0 {
+			// Disambiguate: vanished → 404 as today; alive with another
+			// revision → conflict with the current row attached.
+			current, err := loadRoutine(ctx, q, userID, routineID)
+			if err != nil {
+				return domain.Routine{}, err
+			}
+			return domain.Routine{}, &ports.ConflictError{Current: current}
+		}
+		row, err = q.GetRoutine(ctx, gen.GetRoutineParams{ID: routineID, UserID: userID})
+		if err != nil {
+			return domain.Routine{}, fmt.Errorf("re-reading updated routine: %w", err)
+		}
 	}
 
 	if err := q.DeleteRoutineExercises(ctx, routineID); err != nil {
@@ -105,6 +142,9 @@ func (r *RoutineRepository) Update(ctx context.Context, userID, routineID, name 
 	if err != nil {
 		return domain.Routine{}, err
 	}
+	if err := q.BumpProfileRev(ctx, userID); err != nil {
+		return domain.Routine{}, fmt.Errorf("bumping profile rev: %w", err)
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return domain.Routine{}, fmt.Errorf("committing routine update: %w", err)
 	}
@@ -115,14 +155,15 @@ func (r *RoutineRepository) Update(ctx context.Context, userID, routineID, name 
 		Name:        row.Name,
 		Description: row.Description,
 		CreatedAt:   row.CreatedAt.Time,
+		Revision:    row.Revision,
 		Exercises:   stored,
 		Tags:        tags,
 	}, nil
 }
 
-// Get returns one routine with exercises (by position) and tags.
-func (r *RoutineRepository) Get(ctx context.Context, userID, routineID string) (domain.Routine, error) {
-	q := gen.New(r.pool)
+// loadRoutine reads a full routine through the given Queries handle (tx or
+// pool); ErrNoRows maps to ErrNotFound.
+func loadRoutine(ctx context.Context, q *gen.Queries, userID, routineID string) (domain.Routine, error) {
 	row, err := q.GetRoutine(ctx, gen.GetRoutineParams{ID: routineID, UserID: userID})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -130,7 +171,6 @@ func (r *RoutineRepository) Get(ctx context.Context, userID, routineID string) (
 		}
 		return domain.Routine{}, fmt.Errorf("getting routine: %w", err)
 	}
-
 	exRows, err := q.ListRoutineExercises(ctx, routineID)
 	if err != nil {
 		return domain.Routine{}, fmt.Errorf("listing routine exercises: %w", err)
@@ -139,8 +179,12 @@ func (r *RoutineRepository) Get(ctx context.Context, userID, routineID string) (
 	if err != nil {
 		return domain.Routine{}, fmt.Errorf("listing routine tags: %w", err)
 	}
-
 	return routineFromRows(row, exRows, tagRows), nil
+}
+
+// Get returns one routine with exercises (by position) and tags.
+func (r *RoutineRepository) Get(ctx context.Context, userID, routineID string) (domain.Routine, error) {
+	return loadRoutine(ctx, gen.New(r.pool), userID, routineID)
 }
 
 // List returns the user's routines with their bodies attached, optionally
@@ -181,15 +225,40 @@ func (r *RoutineRepository) List(ctx context.Context, userID, tag string) ([]dom
 }
 
 // Delete removes the routine; its exercises and tags go by ON DELETE CASCADE.
+// Wrapped in a transaction with the profile-rev bump so the poll cursor
+// never misses a delete (sync D1, design decision 3).
 func (r *RoutineRepository) Delete(ctx context.Context, userID, routineID string) error {
-	n, err := gen.New(r.pool).DeleteRoutine(ctx, gen.DeleteRoutineParams{ID: routineID, UserID: userID})
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("beginning delete transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	q := gen.New(tx)
+	n, err := q.DeleteRoutine(ctx, gen.DeleteRoutineParams{ID: routineID, UserID: userID})
 	if err != nil {
 		return fmt.Errorf("deleting routine: %w", err)
 	}
 	if n == 0 {
 		return ports.ErrNotFound
 	}
-	return nil
+	if err := q.BumpProfileRev(ctx, userID); err != nil {
+		return fmt.Errorf("bumping profile rev: %w", err)
+	}
+	return tx.Commit(ctx)
+}
+
+// ProfileRev returns the user's monotonic change counter; a user who never
+// wrote has 0.
+func (r *RoutineRepository) ProfileRev(ctx context.Context, userID string) (int64, error) {
+	rev, err := gen.New(r.pool).GetProfileRev(ctx, userID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, nil
+		}
+		return 0, fmt.Errorf("reading profile rev: %w", err)
+	}
+	return rev, nil
 }
 
 // validateExerciseIDs checks the whole set against the catalog in one query,
@@ -270,6 +339,7 @@ func routineFromRows(row gen.Routine, exRows []gen.RoutineExercise, tags []strin
 		Name:        row.Name,
 		Description: row.Description,
 		CreatedAt:   row.CreatedAt.Time,
+		Revision:    row.Revision,
 		Exercises:   exercises,
 		Tags:        tags,
 	}
@@ -321,8 +391,16 @@ func (r *FitnessLevelRepository) GetUserLevel(ctx context.Context, userID string
 }
 
 // SetUserLevel upserts the user's level; unknown levels read as ErrNotFound.
+// Transactional with the profile-rev bump: the level feeds every detail's
+// scaled variant, so other devices must see it in the poll cursor (D1).
 func (r *FitnessLevelRepository) SetUserLevel(ctx context.Context, userID, levelID string) error {
-	q := gen.New(r.pool)
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("beginning level transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	q := gen.New(tx)
 	if _, err := q.GetFitnessLevel(ctx, levelID); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ports.ErrNotFound
@@ -332,7 +410,10 @@ func (r *FitnessLevelRepository) SetUserLevel(ctx context.Context, userID, level
 	if err := q.SetUserFitnessLevel(ctx, gen.SetUserFitnessLevelParams{UserID: userID, FitnessLevelID: levelID}); err != nil {
 		return fmt.Errorf("setting fitness level: %w", err)
 	}
-	return nil
+	if err := q.BumpProfileRev(ctx, userID); err != nil {
+		return fmt.Errorf("bumping profile rev: %w", err)
+	}
+	return tx.Commit(ctx)
 }
 
 func levelFromRow(row gen.FitnessLevel, err error) (domain.FitnessLevel, error) {

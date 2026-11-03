@@ -53,10 +53,21 @@ func (q *Queries) AddRoutineTag(ctx context.Context, arg AddRoutineTagParams) er
 	return err
 }
 
+const bumpProfileRev = `-- name: BumpProfileRev :exec
+INSERT INTO profile_sync_state (user_id, rev)
+VALUES ($1, 1)
+ON CONFLICT (user_id) DO UPDATE SET rev = profile_sync_state.rev + 1, updated_at = now()
+`
+
+func (q *Queries) BumpProfileRev(ctx context.Context, userID string) error {
+	_, err := q.db.Exec(ctx, bumpProfileRev, userID)
+	return err
+}
+
 const createRoutine = `-- name: CreateRoutine :one
 INSERT INTO routines (user_id, name, description)
 VALUES ($1, $2, $3)
-RETURNING id, user_id, name, description, created_at
+RETURNING id, user_id, name, description, created_at, revision
 `
 
 type CreateRoutineParams struct {
@@ -74,6 +85,7 @@ func (q *Queries) CreateRoutine(ctx context.Context, arg CreateRoutineParams) (R
 		&i.Name,
 		&i.Description,
 		&i.CreatedAt,
+		&i.Revision,
 	)
 	return i, err
 }
@@ -132,8 +144,20 @@ func (q *Queries) GetFitnessLevel(ctx context.Context, id string) (FitnessLevel,
 	return i, err
 }
 
+const getProfileRev = `-- name: GetProfileRev :one
+SELECT rev FROM profile_sync_state
+WHERE user_id = $1
+`
+
+func (q *Queries) GetProfileRev(ctx context.Context, userID string) (int64, error) {
+	row := q.db.QueryRow(ctx, getProfileRev, userID)
+	var rev int64
+	err := row.Scan(&rev)
+	return rev, err
+}
+
 const getRoutine = `-- name: GetRoutine :one
-SELECT id, user_id, name, description, created_at FROM routines
+SELECT id, user_id, name, description, created_at, revision FROM routines
 WHERE id = $1 AND user_id = $2
 `
 
@@ -151,6 +175,7 @@ func (q *Queries) GetRoutine(ctx context.Context, arg GetRoutineParams) (Routine
 		&i.Name,
 		&i.Description,
 		&i.CreatedAt,
+		&i.Revision,
 	)
 	return i, err
 }
@@ -295,7 +320,7 @@ func (q *Queries) ListRoutineTagsByUser(ctx context.Context, userID string) ([]R
 }
 
 const listRoutines = `-- name: ListRoutines :many
-SELECT id, user_id, name, description, created_at FROM routines
+SELECT id, user_id, name, description, created_at, revision FROM routines
 WHERE user_id = $1
 ORDER BY created_at DESC, id
 `
@@ -315,6 +340,7 @@ func (q *Queries) ListRoutines(ctx context.Context, userID string) ([]Routine, e
 			&i.Name,
 			&i.Description,
 			&i.CreatedAt,
+			&i.Revision,
 		); err != nil {
 			return nil, err
 		}
@@ -343,9 +369,9 @@ func (q *Queries) SetUserFitnessLevel(ctx context.Context, arg SetUserFitnessLev
 }
 
 const updateRoutine = `-- name: UpdateRoutine :one
-UPDATE routines SET name = $2, description = $3
+UPDATE routines SET name = $2, description = $3, revision = revision + 1
 WHERE id = $1 AND user_id = $4
-RETURNING id, user_id, name, description, created_at
+RETURNING id, user_id, name, description, created_at, revision
 `
 
 type UpdateRoutineParams struct {
@@ -369,8 +395,36 @@ func (q *Queries) UpdateRoutine(ctx context.Context, arg UpdateRoutineParams) (R
 		&i.Name,
 		&i.Description,
 		&i.CreatedAt,
+		&i.Revision,
 	)
 	return i, err
+}
+
+const updateRoutineIfMatch = `-- name: UpdateRoutineIfMatch :execrows
+UPDATE routines SET name = $2, description = $3, revision = revision + 1
+WHERE id = $1 AND user_id = $4 AND revision = $5
+`
+
+type UpdateRoutineIfMatchParams struct {
+	ID          string
+	Name        string
+	Description *string
+	UserID      string
+	Revision    int64
+}
+
+func (q *Queries) UpdateRoutineIfMatch(ctx context.Context, arg UpdateRoutineIfMatchParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateRoutineIfMatch,
+		arg.ID,
+		arg.Name,
+		arg.Description,
+		arg.UserID,
+		arg.Revision,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const validateExerciseIDs = `-- name: ValidateExerciseIDs :many

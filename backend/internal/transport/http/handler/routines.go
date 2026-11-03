@@ -4,6 +4,8 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -58,6 +60,7 @@ type routineDetailDTO struct {
 	Name             string               `json:"name"`
 	Description      *string              `json:"description,omitempty"`
 	Tags             []string             `json:"tags"`
+	Revision         int64                `json:"revision"`
 	Exercises        []routineExerciseDTO `json:"exercises"`
 	Level            fitnessLevelDTO      `json:"level"`
 	ScaledExercises  []routineExerciseDTO `json:"scaled_exercises"`
@@ -70,6 +73,7 @@ type routineSummaryDTO struct {
 	Name          string   `json:"name"`
 	Description   *string  `json:"description,omitempty"`
 	Tags          []string `json:"tags"`
+	Revision      int64    `json:"revision"`
 	ExerciseCount int      `json:"exercise_count"`
 	TotalTimeS    int      `json:"total_time_s"`
 }
@@ -113,6 +117,7 @@ func toRoutineDetailDTO(d service.RoutineDetail) routineDetailDTO {
 		Name:             d.Routine.Name,
 		Description:      d.Routine.Description,
 		Tags:             d.Routine.Tags,
+		Revision:         d.Routine.Revision,
 		Exercises:        toExerciseDTOs(d.Routine.Exercises),
 		Level:            fitnessLevelDTO{ID: d.Level.ID, Name: d.Level.Name, ScaleFactor: d.Level.ScaleFactor},
 		ScaledExercises:  toExerciseDTOs(d.ScaledExercises),
@@ -149,6 +154,7 @@ func (h *RoutineHandler) List(w http.ResponseWriter, r *http.Request) {
 			Name:          s.Name,
 			Description:   s.Description,
 			Tags:          s.Tags,
+			Revision:      s.Revision,
 			ExerciseCount: s.ExerciseCount,
 			TotalTimeS:    s.TotalTimeS,
 		})
@@ -165,17 +171,40 @@ func (h *RoutineHandler) Get(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, toRoutineDetailDTO(detail))
 }
 
-// Update handles PUT /api/v1/routines/{id} (full replacement).
+// Update handles PUT /api/v1/routines/{id} (full replacement). An optional
+// `If-Match: <revision>` header conditions the write (sync D1): a stale
+// revision answers 409 with the current row attached.
 func (h *RoutineHandler) Update(w http.ResponseWriter, r *http.Request) {
 	req, ok := decodeRoutineRequest(w, r)
 	if !ok {
 		return
 	}
-	detail, err := h.svc.Update(r.Context(), middleware.UserID(r), chi.URLParam(r, "id"), toRoutineInput(req))
+	var expected *int64
+	if raw := strings.TrimSpace(r.Header.Get("If-Match")); raw != "" {
+		v, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || v < 1 {
+			writeError(w, http.StatusBadRequest, "If-Match must be a revision number")
+			return
+		}
+		expected = &v
+	}
+	detail, err := h.svc.Update(r.Context(), middleware.UserID(r), chi.URLParam(r, "id"), toRoutineInput(req), expected)
 	if !writeRoutineResult(w, err, "updating routine") {
 		return
 	}
 	writeJSON(w, http.StatusOK, toRoutineDetailDTO(detail))
+}
+
+// ProfileRev handles GET /api/v1/me/rev — the tiny poll endpoint of the
+// sync contract (design decision 1).
+func (h *RoutineHandler) ProfileRev(w http.ResponseWriter, r *http.Request) {
+	rev, err := h.svc.ProfileRev(r.Context(), middleware.UserID(r))
+	if err != nil {
+		log.Printf("reading profile rev: %v", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]int64{"rev": rev})
 }
 
 // Delete handles DELETE /api/v1/routines/{id}.
@@ -239,6 +268,16 @@ func decodeRoutineRequest(w http.ResponseWriter, r *http.Request) (routineReques
 func writeRoutineResult(w http.ResponseWriter, err error, what string) bool {
 	if err == nil {
 		return true
+	}
+	var conflict *service.ConflictError
+	if errors.As(err, &conflict) {
+		// 409 with the current row attached: the client merges without an
+		// extra request (sync D1, design decision 2).
+		writeJSON(w, http.StatusConflict, map[string]any{
+			"error":   conflict.Error(),
+			"routine": toRoutineDetailDTO(conflict.Detail),
+		})
+		return false
 	}
 	switch {
 	case errors.Is(err, ports.ErrInvalidInput):

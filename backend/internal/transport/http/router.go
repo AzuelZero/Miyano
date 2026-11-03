@@ -68,6 +68,8 @@ func NewRouter(h Handlers) *chi.Mux {
 
 			r.Get("/me/fitness-level", h.Routines.GetLevel)
 			r.Put("/me/fitness-level", h.Routines.SetLevel)
+			// Sync contract D1: tiny poll endpoint (profile change counter).
+			r.Get("/me/rev", h.Routines.ProfileRev)
 
 			r.Post("/routines", h.Routines.Create)
 			r.Get("/routines", h.Routines.List)

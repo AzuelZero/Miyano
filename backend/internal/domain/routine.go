@@ -23,8 +23,11 @@ type Routine struct {
 	Name        string
 	Description *string
 	CreatedAt   time.Time
-	Exercises   []RoutineExercise
-	Tags        []string
+	// Revision is the per-row version for conditioned writes (If-Match).
+	// Starts at 1; every update increments it (sync contract D1).
+	Revision  int64
+	Exercises []RoutineExercise
+	Tags      []string
 }
 
 // FitnessLevel is one of the seeded levels with its auto-scale factor.

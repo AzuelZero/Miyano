@@ -105,6 +105,7 @@ type fakeRoutineRepo struct {
 	byUser    map[string]map[string]domain.Routine
 	knownExes map[string]bool
 	nextID    int
+	revs      map[string]int64
 }
 
 func (f *fakeRoutineRepo) Create(_ context.Context, userID, name string, description *string, exercises []domain.RoutineExercise, tags []string) (domain.Routine, error) {
@@ -120,22 +121,28 @@ func (f *fakeRoutineRepo) Create(_ context.Context, userID, name string, descrip
 		ex.Position = i + 1
 		stored = append(stored, ex)
 	}
-	r := domain.Routine{ID: id, UserID: userID, Name: name, Description: description, Exercises: stored, Tags: tags}
+	r := domain.Routine{ID: id, UserID: userID, Name: name, Description: description, Revision: 1, Exercises: stored, Tags: tags}
 	if f.byUser[userID] == nil {
 		f.byUser[userID] = map[string]domain.Routine{}
 	}
 	f.byUser[userID][id] = r
+	f.revs[userID]++
 	return r, nil
 }
 
-func (f *fakeRoutineRepo) Update(_ context.Context, userID, routineID, name string, description *string, exercises []domain.RoutineExercise, tags []string) (domain.Routine, error) {
+func (f *fakeRoutineRepo) Update(_ context.Context, userID, routineID, name string, description *string, exercises []domain.RoutineExercise, tags []string, expectedRevision *int64) (domain.Routine, error) {
 	r, ok := f.byUser[userID][routineID]
 	if !ok {
 		return domain.Routine{}, ports.ErrNotFound
 	}
+	if expectedRevision != nil && r.Revision != *expectedRevision {
+		return domain.Routine{}, &ports.ConflictError{Current: r}
+	}
 	r.Name, r.Description, r.Tags = name, description, tags
 	r.Exercises = append([]domain.RoutineExercise(nil), exercises...)
+	r.Revision++
 	f.byUser[userID][routineID] = r
+	f.revs[userID]++
 	return r, nil
 }
 
@@ -168,11 +175,21 @@ func (f *fakeRoutineRepo) Delete(_ context.Context, userID, routineID string) er
 		return ports.ErrNotFound
 	}
 	delete(f.byUser[userID], routineID)
+	f.revs[userID]++
 	return nil
 }
 
-// fakeLevelRepo is an in-memory FitnessLevelRepository.
-type fakeLevelRepo struct{ users map[string]string }
+func (f *fakeRoutineRepo) ProfileRev(_ context.Context, userID string) (int64, error) {
+	return f.revs[userID], nil
+}
+
+// fakeLevelRepo is an in-memory FitnessLevelRepository. revs is SHARED with
+// fakeRoutineRepo: like the real adapter, a level write moves the sync
+// cursor (the scaled detail depends on the level — sync D1, decision 3).
+type fakeLevelRepo struct {
+	users map[string]string
+	revs  map[string]int64
+}
 
 func (f *fakeLevelRepo) GetByID(_ context.Context, id string) (domain.FitnessLevel, error) {
 	levels := map[string]float64{"beginner": 0.70, "intermediate": 1.00, "advanced": 1.30}
@@ -196,6 +213,7 @@ func (f *fakeLevelRepo) SetUserLevel(_ context.Context, userID, levelID string) 
 		return err
 	}
 	f.users[userID] = levelID
+	f.revs[userID]++
 	return nil
 }
 
@@ -208,9 +226,14 @@ func newTestRouter(exercises ...domain.Exercise) http.Handler {
 		tokens: map[string]bool{},
 	}, fakeHasher{}, tokens)
 	exerciseSvc := service.NewExerciseService(&fakeRepo{exercises: exercises})
+	routineRepo := &fakeRoutineRepo{
+		byUser:    map[string]map[string]domain.Routine{},
+		knownExes: map[string]bool{"0001": true, "0002": true},
+		revs:      map[string]int64{},
+	}
 	routineSvc := service.NewRoutineService(
-		&fakeRoutineRepo{byUser: map[string]map[string]domain.Routine{}, knownExes: map[string]bool{"0001": true, "0002": true}},
-		&fakeLevelRepo{users: map[string]string{}},
+		routineRepo,
+		&fakeLevelRepo{users: map[string]string{}, revs: routineRepo.revs},
 	)
 	return NewRouter(Handlers{
 		Health:    handler.Health(),
@@ -787,5 +810,113 @@ func TestRouterBodyTooLargeIs413(t *testing.T) {
 
 	if resp.StatusCode != http.StatusRequestEntityTooLarge {
 		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusRequestEntityTooLarge)
+	}
+}
+
+func TestRouterSyncContractIfMatchAndProfileRev(t *testing.T) {
+	srv := httptest.NewServer(newTestRouter())
+	defer srv.Close()
+	token := registerUser(t, srv.URL, "sync-d1@example.com")
+
+	// Create → 201 with revision 1.
+	create := authedJSON(t, "POST", srv.URL+"/api/v1/routines", token, map[string]any{
+		"name": "V1", "tags": []string{"pierna"}, "exercises": []map[string]any{{"exercise_id": "0001"}},
+	})
+	var created map[string]any
+	_ = jsonDecode(create.Body, &created)
+	create.Body.Close()
+	id, _ := created["id"].(string)
+	if id == "" {
+		t.Fatalf("create returned no id: %v", created)
+	}
+	if created["revision"] != float64(1) {
+		t.Errorf("created revision = %v, want 1", created["revision"])
+	}
+
+	put := func(ifMatch string) *http.Response {
+		t.Helper()
+		body, _ := json.Marshal(map[string]any{
+			"name": "V2", "tags": []string{}, "exercises": []map[string]any{{"exercise_id": "0002"}},
+		})
+		req, err := http.NewRequest(http.MethodPut, srv.URL+"/api/v1/routines/"+id, bytes.NewReader(body))
+		if err != nil {
+			t.Fatalf("building PUT: %v", err)
+		}
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("Content-Type", "application/json")
+		if ifMatch != "" {
+			req.Header.Set("If-Match", ifMatch)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("PUT: %v", err)
+		}
+		return resp
+	}
+
+	// Matching If-Match → 200 with the bumped revision.
+	resp := put("1")
+	var updated map[string]any
+	_ = jsonDecode(resp.Body, &updated)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || updated["revision"] != float64(2) {
+		t.Errorf("PUT(If-Match 1) = %d rev %v, want 200 rev 2", resp.StatusCode, updated["revision"])
+	}
+
+	// Stale If-Match → 409 WITH the current row attached (never a 404).
+	resp = put("1")
+	var conflict map[string]any
+	_ = jsonDecode(resp.Body, &conflict)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusConflict {
+		t.Fatalf("PUT(stale If-Match) = %d, want 409", resp.StatusCode)
+	}
+	current, _ := conflict["routine"].(map[string]any)
+	if current == nil || current["revision"] != float64(2) || current["name"] != "V2" {
+		t.Errorf("409 body routine = %v, want current V2 rev 2 attached", current)
+	}
+
+	// Garbage If-Match → 400.
+	resp = put("not-a-number")
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("PUT(garbage If-Match) = %d, want 400", resp.StatusCode)
+	}
+
+	// No If-Match → 200 unconditional (today's B3 client, regression).
+	resp = put("")
+	var overwritten map[string]any
+	_ = jsonDecode(resp.Body, &overwritten)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || overwritten["revision"] != float64(3) {
+		t.Errorf("PUT(no If-Match) = %d rev %v, want 200 rev 3", resp.StatusCode, overwritten["revision"])
+	}
+
+	getRev := func() float64 {
+		t.Helper()
+		resp := authedJSON(t, "GET", srv.URL+"/api/v1/me/rev", token, nil)
+		var body map[string]any
+		_ = jsonDecode(resp.Body, &body)
+		resp.Body.Close()
+		return body["rev"].(float64)
+	}
+
+	// create + 2 successful PUTs = 3; the conflict must NOT bump.
+	if rev := getRev(); rev != 3 {
+		t.Errorf("rev = %v, want 3 (conflict must not bump)", rev)
+	}
+
+	// Level change moves the cursor (scaled details depend on it).
+	level := authedJSON(t, "PUT", srv.URL+"/api/v1/me/fitness-level", token, map[string]string{"level_id": "advanced"})
+	level.Body.Close()
+	if rev := getRev(); rev != 4 {
+		t.Errorf("rev after SetLevel = %v, want 4", rev)
+	}
+
+	// Delete moves the cursor too (disappearance is a visible change).
+	del := authedJSON(t, "DELETE", srv.URL+"/api/v1/routines/"+id, token, nil)
+	del.Body.Close()
+	if rev := getRev(); rev != 5 {
+		t.Errorf("rev after delete = %v, want 5", rev)
 	}
 }
