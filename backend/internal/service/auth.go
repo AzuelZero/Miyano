@@ -11,7 +11,13 @@ import (
 	"miyano/internal/ports"
 )
 
-const minPasswordLength = 8
+const (
+	minPasswordLength = 8
+	// maxPasswordLength caps the input BEFORE hashing: argon2id has a fixed
+	// high cost per attempt (64 MiB), so unbounded passwords are a CPU/RAM
+	// lever against the unauthenticated endpoints (audit 03/11).
+	maxPasswordLength = 1024
+)
 
 // AuthService serves registration, login and refresh-token rotation.
 type AuthService struct {
@@ -28,7 +34,7 @@ func NewAuthService(users ports.UserAuthRepository, hasher ports.PasswordHasher,
 // Register validates the input, hashes the password, persists the user with
 // its profile and issues the first token pair.
 func (s *AuthService) Register(ctx context.Context, email, password, displayName string) (ports.AuthTokens, error) {
-	if len(password) < minPasswordLength {
+	if len(password) < minPasswordLength || len(password) > maxPasswordLength {
 		return ports.AuthTokens{}, ports.ErrWeakPassword
 	}
 
@@ -48,6 +54,11 @@ func (s *AuthService) Register(ctx context.Context, email, password, displayName
 // password, unusable hash) maps to ErrInvalidCredentials so responses do
 // not reveal whether the email exists.
 func (s *AuthService) Login(ctx context.Context, email, password string) (ports.AuthTokens, error) {
+	// Oversized passwords cannot be valid; rejecting before the user lookup
+	// keeps argon2 from ever hashing megabytes of input.
+	if len(password) > maxPasswordLength {
+		return ports.AuthTokens{}, ports.ErrInvalidCredentials
+	}
 	user, err := s.users.GetUserByEmail(ctx, email)
 	if err != nil {
 		if errors.Is(err, ports.ErrNotFound) {

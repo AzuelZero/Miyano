@@ -15,6 +15,16 @@ import (
 // (lazy default — never persisted until the user chooses, design decision 5).
 const DefaultFitnessLevelID = "beginner"
 
+// Input caps for create/update: unbounded cardinality fed one-insert-per-row
+// transactions that held pool connections (audit 03/11).
+const (
+	maxRoutineNameLen   = 200
+	maxDescriptionLen   = 2000
+	maxRoutineExercises = 100
+	maxRoutineTags      = 20
+	maxTagLen           = 50
+)
+
 // RoutineService serves the routine use cases: CRUD, tag filtering,
 // level management and the scaled/time-computed views (ADR D007).
 type RoutineService struct {
@@ -159,6 +169,23 @@ func (s *RoutineService) detail(ctx context.Context, userID string, routine doma
 func validateRoutineInput(in RoutineInput) error {
 	if strings.TrimSpace(in.Name) == "" {
 		return fmt.Errorf("%w: name is required", ports.ErrInvalidInput)
+	}
+	if len(in.Name) > maxRoutineNameLen {
+		return fmt.Errorf("%w: name longer than %d characters", ports.ErrInvalidInput, maxRoutineNameLen)
+	}
+	if in.Description != nil && len(*in.Description) > maxDescriptionLen {
+		return fmt.Errorf("%w: description longer than %d characters", ports.ErrInvalidInput, maxDescriptionLen)
+	}
+	if len(in.Exercises) > maxRoutineExercises {
+		return fmt.Errorf("%w: too many exercises (max %d)", ports.ErrInvalidInput, maxRoutineExercises)
+	}
+	if len(in.Tags) > maxRoutineTags {
+		return fmt.Errorf("%w: too many tags (max %d)", ports.ErrInvalidInput, maxRoutineTags)
+	}
+	for _, tag := range in.Tags {
+		if len(tag) > maxTagLen {
+			return fmt.Errorf("%w: tag %q longer than %d characters", ports.ErrInvalidInput, tag, maxTagLen)
+		}
 	}
 	for _, ex := range in.Exercises {
 		for _, v := range []*int{ex.TargetSets, ex.TargetReps, ex.TargetDurationS, ex.RestS} {

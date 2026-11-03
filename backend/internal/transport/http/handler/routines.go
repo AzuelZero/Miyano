@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
@@ -203,8 +202,7 @@ func (h *RoutineHandler) SetLevel(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		LevelID string `json:"level_id"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON body")
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 
@@ -230,8 +228,7 @@ func (h *RoutineHandler) SetLevel(w http.ResponseWriter, r *http.Request) {
 
 func decodeRoutineRequest(w http.ResponseWriter, r *http.Request) (routineRequest, bool) {
 	var req routineRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON body")
+	if !decodeJSON(w, r, &req) {
 		return routineRequest{}, false
 	}
 	return req, true

@@ -273,3 +273,24 @@ func TestRefreshAccessTokenRejected(t *testing.T) {
 		t.Errorf("Refresh(access token) error = %v, want ErrRefreshRejected", err)
 	}
 }
+
+func TestRegisterRejectsOversizedPassword(t *testing.T) {
+	svc, repo, _ := newAuthService()
+
+	huge := strings.Repeat("p", 2000)
+	if _, err := svc.Register(context.Background(), "big@example.com", huge, "Big"); !errors.Is(err, ports.ErrWeakPassword) {
+		t.Errorf("Register(2000-char password) error = %v, want ErrWeakPassword", err)
+	}
+	if len(repo.users) != 0 {
+		t.Error("user persisted despite oversized password")
+	}
+}
+
+func TestLoginOversizedPasswordRejectedBeforeLookup(t *testing.T) {
+	svc, _, _ := newAuthService()
+
+	huge := strings.Repeat("p", 2000)
+	if _, err := svc.Login(context.Background(), "anyone@example.com", huge); !errors.Is(err, ports.ErrInvalidCredentials) {
+		t.Errorf("Login(2000-char password) error = %v, want ErrInvalidCredentials", err)
+	}
+}
