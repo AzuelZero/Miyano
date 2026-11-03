@@ -45,6 +45,8 @@ func TestValidateRequiresStrongJWTSecret(t *testing.T) {
 	}{
 		{"absent", ""},
 		{"too short", strings.Repeat("a", 31)},
+		{"published example value", "change-me-minimum-32-characters!!"},
+		{"single repeated character", strings.Repeat("a", 64)},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -55,8 +57,8 @@ func TestValidateRequiresStrongJWTSecret(t *testing.T) {
 		})
 	}
 
-	cfg := Config{Port: defaultPort, DatabaseURL: validDB, JWTSecret: strings.Repeat("a", 32)}
+	cfg := Config{Port: defaultPort, DatabaseURL: validDB, JWTSecret: strings.Repeat("ab", 20)}
 	if err := cfg.Validate(); err != nil {
-		t.Errorf("Validate() with 32-char secret = %v, want nil", err)
+		t.Errorf("Validate() with alternating 40-char secret = %v, want nil", err)
 	}
 }

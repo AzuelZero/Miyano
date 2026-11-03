@@ -27,6 +27,10 @@ type Handlers struct {
 	MediaDir string
 }
 
+// maxRequestBodyBytes caps every request body: Miyano's JSON payloads are
+// tiny, and unbounded bodies fed argon2id / routine inserts (audit 03/11).
+const maxRequestBodyBytes = 1 << 20 // 1 MiB
+
 // NewRouter builds the application router with the standard middleware stack
 // and the /api/v1 route tree: public health, rate-limited auth endpoints and
 // a JWT-protected group.
@@ -38,10 +42,12 @@ func NewRouter(h Handlers) *chi.Mux {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(30 * time.Second))
+	r.Use(appmiddleware.BodyLimit(maxRequestBodyBytes))
 
 	// Exercise-dataset media (GIFs/images), served from the local clone.
 	// Outside the JWT group on purpose: public dataset files, not user data.
-	r.Handle("/media/*", http.StripPrefix("/media/", http.FileServer(http.Dir(h.MediaDir))))
+	// Allowlist (images/ + videos/, no listing, nosniff) per audit 03/11.
+	r.Handle("/media/*", handler.ServeMedia(h.MediaDir))
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/health", h.Health)

@@ -698,7 +698,10 @@ func TestRouterMediaGhostFileIs404(t *testing.T) {
 
 func TestRouterMediaServesRealFile(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "0001-test.gif"), []byte("GIF89a"), 0o644); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, "images"), 0o755); err != nil {
+		t.Fatalf("creating images dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "images", "0001-test.gif"), []byte("GIF89a"), 0o644); err != nil {
 		t.Fatalf("writing fixture: %v", err)
 	}
 	tokens := jwttoken.NewGenerator(testRouterSecret, 15*time.Minute, 7*24*time.Hour)
@@ -706,7 +709,7 @@ func TestRouterMediaServesRealFile(t *testing.T) {
 	srv := httptest.NewServer(r)
 	defer srv.Close()
 
-	resp, err := http.Get(srv.URL + "/media/0001-test.gif")
+	resp, err := http.Get(srv.URL + "/media/images/0001-test.gif")
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
@@ -714,5 +717,75 @@ func TestRouterMediaServesRealFile(t *testing.T) {
 
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+	if got := resp.Header.Get("X-Content-Type-Options"); got != "nosniff" {
+		t.Errorf("X-Content-Type-Options = %q, want nosniff", got)
+	}
+}
+
+func TestRouterMediaAllowlistBlocksEverythingElse(t *testing.T) {
+	dir := t.TempDir()
+	for _, rel := range []string{".git/config", "index.html", "setup.html", "data/foo.json", "images/.hidden.gif", "videos/real.mp4"} {
+		full := filepath.Join(dir, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatalf("creating %s: %v", rel, err)
+		}
+		if err := os.WriteFile(full, []byte("x"), 0o644); err != nil {
+			t.Fatalf("writing %s: %v", rel, err)
+		}
+	}
+	tokens := jwttoken.NewGenerator(testRouterSecret, 15*time.Minute, 7*24*time.Hour)
+	r := NewRouter(Handlers{MediaDir: dir, Verifier: tokens})
+	srv := httptest.NewServer(r)
+	defer srv.Close()
+
+	blocked := []string{
+		"/media/",
+		"/media/images/",
+		"/media/.git/config",
+		"/media/index.html",
+		"/media/setup.html",
+		"/media/data/foo.json",
+		"/media/images/.hidden.gif",
+		"/media/images/../videos/real.mp4",
+	}
+	for _, path := range blocked {
+		resp, err := http.Get(srv.URL + path)
+		if err != nil {
+			t.Fatalf("GET %s failed: %v", path, err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusNotFound {
+			t.Errorf("GET %s status = %d, want 404", path, resp.StatusCode)
+		}
+	}
+
+	resp, err := http.Get(srv.URL + "/media/videos/real.mp4")
+	if err != nil {
+		t.Fatalf("GET allowed file failed: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("GET /media/videos/real.mp4 status = %d, want 200", resp.StatusCode)
+	}
+}
+
+func TestRouterBodyTooLargeIs413(t *testing.T) {
+	srv := httptest.NewServer(newTestRouter())
+	defer srv.Close()
+
+	huge := strings.Repeat("a", 1<<20+64)
+	body, err := json.Marshal(map[string]string{"email": "a@b.c", "password": huge})
+	if err != nil {
+		t.Fatalf("marshaling body: %v", err)
+	}
+	resp, err := http.Post(srv.URL+"/api/v1/auth/login", "application/json", bytes.NewReader(body))
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusRequestEntityTooLarge {
+		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusRequestEntityTooLarge)
 	}
 }

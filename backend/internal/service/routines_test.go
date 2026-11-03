@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	"miyano/internal/domain"
@@ -345,5 +346,34 @@ func TestLevelDefaultAndSet(t *testing.T) {
 
 	if err := svc.SetLevel(ctx, "user-a", "gigachad"); !errors.Is(err, ports.ErrInvalidInput) {
 		t.Errorf("SetLevel(unknown) error = %v, want ErrInvalidInput", err)
+	}
+}
+
+func TestCreateValidatesInputCaps(t *testing.T) {
+	svc, _, _ := newRoutineService("0001")
+	ctx := context.Background()
+
+	tags := make([]string, maxRoutineTags+1)
+	for i := range tags {
+		tags[i] = "t"
+	}
+	if _, err := svc.Create(ctx, "user-a", RoutineInput{Name: "X", Tags: tags}); !errors.Is(err, ports.ErrInvalidInput) {
+		t.Errorf("Create(21 tags) error = %v, want ErrInvalidInput", err)
+	}
+
+	exercises := make([]domain.RoutineExercise, maxRoutineExercises+1)
+	for i := range exercises {
+		exercises[i] = domain.RoutineExercise{ExerciseID: "0001"}
+	}
+	if _, err := svc.Create(ctx, "user-a", RoutineInput{Name: "X", Exercises: exercises}); !errors.Is(err, ports.ErrInvalidInput) {
+		t.Errorf("Create(101 exercises) error = %v, want ErrInvalidInput", err)
+	}
+
+	if _, err := svc.Create(ctx, "user-a", RoutineInput{Name: strings.Repeat("n", maxRoutineNameLen+1)}); !errors.Is(err, ports.ErrInvalidInput) {
+		t.Errorf("Create(201-char name) error = %v, want ErrInvalidInput", err)
+	}
+
+	if _, err := svc.Create(ctx, "user-a", RoutineInput{Name: "X", Tags: []string{strings.Repeat("t", maxTagLen+1)}}); !errors.Is(err, ports.ErrInvalidInput) {
+		t.Errorf("Create(51-char tag) error = %v, want ErrInvalidInput", err)
 	}
 }
