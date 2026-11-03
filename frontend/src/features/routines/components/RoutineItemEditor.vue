@@ -127,7 +127,7 @@ function updateRest(event: Event): void {
           min="1"
           max="99"
           :value="item.sets"
-          class="w-full rounded-md border border-white/20 bg-background px-3 py-2.5 text-text transition-colors hover:border-white/30 focus:border-transparent focus:outline-2 focus:outline-offset-1 focus:outline-primary-bright"
+          class="w-full rounded-md border border-white/20 bg-background px-3 py-2.5 tabular-nums text-text transition-colors hover:border-white/30 focus:border-transparent focus:outline-2 focus:outline-offset-1 focus:outline-primary-bright"
           @change="updateSets"
         />
       </div>
@@ -142,7 +142,7 @@ function updateRest(event: Event): void {
           min="1"
           max="999"
           :value="item.reps"
-          class="w-full rounded-md border border-white/20 bg-background px-3 py-2.5 text-text transition-colors hover:border-white/30 focus:border-transparent focus:outline-2 focus:outline-offset-1 focus:outline-primary-bright"
+          class="w-full rounded-md border border-white/20 bg-background px-3 py-2.5 tabular-nums text-text transition-colors hover:border-white/30 focus:border-transparent focus:outline-2 focus:outline-offset-1 focus:outline-primary-bright"
           @change="updateReps"
         />
       </div>
@@ -157,7 +157,7 @@ function updateRest(event: Event): void {
           min="5"
           max="3600"
           :value="item.durationS"
-          class="w-full rounded-md border border-white/20 bg-background px-3 py-2.5 text-text transition-colors hover:border-white/30 focus:border-transparent focus:outline-2 focus:outline-offset-1 focus:outline-primary-bright"
+          class="w-full rounded-md border border-white/20 bg-background px-3 py-2.5 tabular-nums text-text transition-colors hover:border-white/30 focus:border-transparent focus:outline-2 focus:outline-offset-1 focus:outline-primary-bright"
           @change="updateDuration"
         />
       </div>
@@ -172,7 +172,7 @@ function updateRest(event: Event): void {
           min="0"
           max="600"
           :value="item.restS"
-          class="w-full rounded-md border border-white/20 bg-background px-3 py-2.5 text-text transition-colors hover:border-white/30 focus:border-transparent focus:outline-2 focus:outline-offset-1 focus:outline-primary-bright"
+          class="w-full rounded-md border border-white/20 bg-background px-3 py-2.5 tabular-nums text-text transition-colors hover:border-white/30 focus:border-transparent focus:outline-2 focus:outline-offset-1 focus:outline-primary-bright"
           @change="updateRest"
         />
       </div>
