@@ -53,6 +53,7 @@ type RoutineSummary struct {
 	Tags          []string
 	ExerciseCount int
 	TotalTimeS    int
+	Revision      int64
 }
 
 // RoutineDetail is the full view: the base routine plus the variant scaled
@@ -77,16 +78,42 @@ func (s *RoutineService) Create(ctx context.Context, userID string, in RoutineIn
 	return s.detail(ctx, userID, routine)
 }
 
-// Update replaces the routine completely and returns the new detail.
-func (s *RoutineService) Update(ctx context.Context, userID, routineID string, in RoutineInput) (RoutineDetail, error) {
+// Update replaces the routine completely and returns the new detail. A
+// non-nil expectedRevision conditions the write (If-Match); a stale revision
+// returns *ConflictError with the server's CURRENT detail attached so the
+// transport can build the 409 body (sync D1).
+func (s *RoutineService) Update(ctx context.Context, userID, routineID string, in RoutineInput, expectedRevision *int64) (RoutineDetail, error) {
 	if err := validateRoutineInput(in); err != nil {
 		return RoutineDetail{}, err
 	}
-	routine, err := s.routines.Update(ctx, userID, routineID, in.Name, in.Description, in.Exercises, in.Tags)
+	routine, err := s.routines.Update(ctx, userID, routineID, in.Name, in.Description, in.Exercises, in.Tags, expectedRevision)
 	if err != nil {
+		var conflict *ports.ConflictError
+		if errors.As(err, &conflict) {
+			current, derr := s.detail(ctx, userID, conflict.Current)
+			if derr != nil {
+				return RoutineDetail{}, derr
+			}
+			return RoutineDetail{}, &ConflictError{Detail: current}
+		}
 		return RoutineDetail{}, err
 	}
 	return s.detail(ctx, userID, routine)
+}
+
+// ConflictError carries the server's current detail for the 409 body.
+type ConflictError struct {
+	Detail RoutineDetail
+}
+
+func (e *ConflictError) Error() string { return "routine was modified concurrently" }
+
+// Is makes errors.Is(err, ports.ErrConflict) work through the wrapper.
+func (e *ConflictError) Is(target error) bool { return target == ports.ErrConflict }
+
+// ProfileRev exposes the user's monotonic change counter (poll cursor).
+func (s *RoutineService) ProfileRev(ctx context.Context, userID string) (int64, error) {
+	return s.routines.ProfileRev(ctx, userID)
 }
 
 // Get returns one routine with its scaled variant and time estimates.
@@ -113,6 +140,7 @@ func (s *RoutineService) List(ctx context.Context, userID, tag string) ([]Routin
 			Tags:          r.Tags,
 			ExerciseCount: len(r.Exercises),
 			TotalTimeS:    domain.TotalEstimatedSeconds(r.Exercises),
+			Revision:      r.Revision,
 		})
 	}
 	return out, nil

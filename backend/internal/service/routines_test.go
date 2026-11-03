@@ -17,6 +17,7 @@ type fakeRoutineRepo struct {
 	byUser    map[string]map[string]domain.Routine
 	knownExes map[string]bool
 	nextID    int
+	revs      map[string]int64
 }
 
 func newFakeRoutineRepo(knownExes ...string) *fakeRoutineRepo {
@@ -24,7 +25,7 @@ func newFakeRoutineRepo(knownExes ...string) *fakeRoutineRepo {
 	for _, id := range knownExes {
 		known[id] = true
 	}
-	return &fakeRoutineRepo{byUser: map[string]map[string]domain.Routine{}, knownExes: known}
+	return &fakeRoutineRepo{byUser: map[string]map[string]domain.Routine{}, knownExes: known, revs: map[string]int64{}}
 }
 
 func (f *fakeRoutineRepo) validate(exes []domain.RoutineExercise) error {
@@ -47,15 +48,16 @@ func (f *fakeRoutineRepo) Create(_ context.Context, userID, name string, descrip
 		ex.Position = i + 1
 		stored = append(stored, ex)
 	}
-	r := domain.Routine{ID: id, UserID: userID, Name: name, Description: description, Exercises: stored, Tags: tags}
+	r := domain.Routine{ID: id, UserID: userID, Name: name, Description: description, Revision: 1, Exercises: stored, Tags: tags}
 	if f.byUser[userID] == nil {
 		f.byUser[userID] = map[string]domain.Routine{}
 	}
 	f.byUser[userID][id] = r
+	f.revs[userID]++
 	return r, nil
 }
 
-func (f *fakeRoutineRepo) Update(_ context.Context, userID, routineID, name string, description *string, exes []domain.RoutineExercise, tags []string) (domain.Routine, error) {
+func (f *fakeRoutineRepo) Update(_ context.Context, userID, routineID, name string, description *string, exes []domain.RoutineExercise, tags []string, expectedRevision *int64) (domain.Routine, error) {
 	if err := f.validate(exes); err != nil {
 		return domain.Routine{}, err
 	}
@@ -63,9 +65,14 @@ func (f *fakeRoutineRepo) Update(_ context.Context, userID, routineID, name stri
 	if !ok {
 		return domain.Routine{}, ports.ErrNotFound
 	}
+	if expectedRevision != nil && r.Revision != *expectedRevision {
+		return domain.Routine{}, &ports.ConflictError{Current: r}
+	}
 	r.Name, r.Description, r.Tags = name, description, tags
 	r.Exercises = append([]domain.RoutineExercise(nil), exes...)
+	r.Revision++
 	f.byUser[userID][routineID] = r
+	f.revs[userID]++
 	return r, nil
 }
 
@@ -92,7 +99,12 @@ func (f *fakeRoutineRepo) Delete(_ context.Context, userID, routineID string) er
 		return ports.ErrNotFound
 	}
 	delete(f.byUser[userID], routineID)
+	f.revs[userID]++
 	return nil
+}
+
+func (f *fakeRoutineRepo) ProfileRev(_ context.Context, userID string) (int64, error) {
+	return f.revs[userID], nil
 }
 
 func containsTag(tags []string, want string) bool {
@@ -283,7 +295,7 @@ func TestUpdateReplacesAndDeleteRemoves(t *testing.T) {
 		Name:      "V2",
 		Tags:      []string{"new", "pierna"},
 		Exercises: []domain.RoutineExercise{{ExerciseID: "0002"}, {ExerciseID: "0001"}},
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("Update() error = %v", err)
 	}
@@ -375,5 +387,55 @@ func TestCreateValidatesInputCaps(t *testing.T) {
 
 	if _, err := svc.Create(ctx, "user-a", RoutineInput{Name: "X", Tags: []string{strings.Repeat("t", maxTagLen+1)}}); !errors.Is(err, ports.ErrInvalidInput) {
 		t.Errorf("Create(51-char tag) error = %v, want ErrInvalidInput", err)
+	}
+}
+
+func TestUpdateIfMatchConflictAndSuccess(t *testing.T) {
+	svc, repo, _ := newRoutineService("0001")
+	ctx := context.Background()
+
+	detail, err := svc.Create(ctx, "user-a", RoutineInput{Name: "V1", Exercises: []domain.RoutineExercise{{ExerciseID: "0001"}}})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	id := detail.Routine.ID
+	if detail.Routine.Revision != 1 {
+		t.Fatalf("created revision = %d, want 1", detail.Routine.Revision)
+	}
+
+	// Stale If-Match: conflict carrying the server's current detail.
+	stale := int64(0)
+	_, err = svc.Update(ctx, "user-a", id, RoutineInput{Name: "Stale"}, &stale)
+	var conflict *ConflictError
+	if !errors.As(err, &conflict) {
+		t.Fatalf("Update(stale) error = %v, want *ConflictError", err)
+	}
+	if conflict.Detail.Routine.Name != "V1" || conflict.Detail.Routine.Revision != 1 {
+		t.Errorf("conflict detail = %q rev %d, want current V1 rev 1", conflict.Detail.Routine.Name, conflict.Detail.Routine.Revision)
+	}
+	if !errors.Is(err, ports.ErrConflict) {
+		t.Errorf("errors.Is(conflict, ErrConflict) = false, want true")
+	}
+
+	// Matching If-Match: success with the bumped revision.
+	current := int64(1)
+	updated, err := svc.Update(ctx, "user-a", id, RoutineInput{Name: "V2", Exercises: []domain.RoutineExercise{{ExerciseID: "0001"}}}, &current)
+	if err != nil {
+		t.Fatalf("Update(matching) error = %v", err)
+	}
+	if updated.Routine.Revision != 2 {
+		t.Errorf("updated revision = %d, want 2", updated.Routine.Revision)
+	}
+
+	// The profile counter advanced once per write (create + one update).
+	rev, err := svc.ProfileRev(ctx, "user-a")
+	if err != nil {
+		t.Fatalf("ProfileRev() error = %v", err)
+	}
+	if rev != 2 {
+		t.Errorf("ProfileRev() = %d, want 2 (conflict must not bump)", rev)
+	}
+	if _, ok := repo.byUser["user-a"][id]; !ok {
+		t.Fatal("routine vanished")
 	}
 }

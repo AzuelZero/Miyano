@@ -56,6 +56,12 @@ type Profile struct {
 	UpdatedAt       pgtype.Timestamptz
 }
 
+type ProfileSyncState struct {
+	UserID    string
+	Rev       int64
+	UpdatedAt pgtype.Timestamptz
+}
+
 type RefreshToken struct {
 	ID        string
 	UserID    string
@@ -71,6 +77,7 @@ type Routine struct {
 	Name        string
 	Description *string
 	CreatedAt   pgtype.Timestamptz
+	Revision    int64
 }
 
 type RoutineExercise struct {

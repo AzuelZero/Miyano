@@ -4,9 +4,22 @@ VALUES ($1, $2, $3)
 RETURNING *;
 
 -- name: UpdateRoutine :one
-UPDATE routines SET name = $2, description = $3
+UPDATE routines SET name = $2, description = $3, revision = revision + 1
 WHERE id = $1 AND user_id = $4
 RETURNING *;
+
+-- name: UpdateRoutineIfMatch :execrows
+UPDATE routines SET name = $2, description = $3, revision = revision + 1
+WHERE id = $1 AND user_id = $4 AND revision = $5;
+
+-- name: BumpProfileRev :exec
+INSERT INTO profile_sync_state (user_id, rev)
+VALUES ($1, 1)
+ON CONFLICT (user_id) DO UPDATE SET rev = profile_sync_state.rev + 1, updated_at = now();
+
+-- name: GetProfileRev :one
+SELECT rev FROM profile_sync_state
+WHERE user_id = $1;
 
 -- name: DeleteRoutineExercises :exec
 DELETE FROM routine_exercises WHERE routine_id = $1;
