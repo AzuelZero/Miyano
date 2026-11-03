@@ -16,6 +16,13 @@ const router = useRouter()
 
 const activeTag = ref(typeof route.query.tag === 'string' ? route.query.tag : '')
 
+// One-shot notice carried by the URL: the editor's save-404 flow lands here
+// (spec: inform AND return to the list). Consumed once, URL cleaned.
+const missingRoutineNotice = ref(route.query.aviso === 'rutina-borrada')
+if (missingRoutineNotice.value) {
+  void router.replace({ query: activeTag.value === '' ? {} : { tag: activeTag.value } })
+}
+
 // Chip clicks drive the URL (?tag=, shareable state); browser back/forward
 // drive the chips. Each side ignores echoes of its own change.
 watch(
@@ -71,6 +78,16 @@ const allTags = computed<string[]>(() => {
           Nueva rutina
         </RouterLink>
       </header>
+
+      <BaseCard v-if="missingRoutineNotice" class="border-danger/40">
+        <p class="font-semibold">La rutina ya no existe</p>
+        <p class="mt-1 text-sm text-muted">
+          Se borró desde otro dispositivo u otra cuenta; tus últimos cambios no se guardaron.
+        </p>
+        <BaseButton variant="ghost" type="button" class="mt-3" @click="missingRoutineNotice = false">
+          Entendido
+        </BaseButton>
+      </BaseCard>
 
       <TagFilter v-if="allTags.length" v-model="activeTag" :tags="allTags" />
 

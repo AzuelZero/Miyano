@@ -142,6 +142,13 @@ async function save(): Promise<void> {
     }
     router.push(`/routines/${saved.id}`)
   } catch (err) {
+    // Spec (routines-ui): saving a routine that vanished (404) informs the
+    // user AND returns to the list — the draft has nowhere left to go.
+    if (err instanceof ApiError && err.status === 404 && isEdit) {
+      await queryClient.invalidateQueries({ queryKey: ['routines'] })
+      await router.push({ path: '/routines', query: { aviso: 'rutina-borrada' } })
+      return
+    }
     formError.value =
       err instanceof ApiError
         ? err.message
