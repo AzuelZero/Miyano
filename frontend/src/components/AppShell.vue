@@ -1,14 +1,17 @@
 <script setup lang="ts">
 import { watch } from 'vue'
-import { ClipboardList, Dumbbell, House, LogOut } from 'lucide-vue-next'
+import { ClipboardList, Dumbbell, House, LogOut, WifiOff } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { useSyncStore } from '../stores/sync'
 
 // App chrome: minimal topbar + centered content + bottom nav (authenticated
 // screens only; existing sections only — no dead UI, craft-floor).
 
 const router = useRouter()
 const auth = useAuthStore()
+const sync = useSyncStore()
+sync.listen()
 
 // A session that dies mid-screen (expired refresh) must not leave the user
 // staring at loading states forever — send them to the login screen.
@@ -16,6 +19,18 @@ watch(
   () => auth.isAuthenticated,
   (authed) => {
     if (!authed) router.push('/login')
+  },
+)
+
+// "De vuelta — sincronizado": brief acknowledgment when connectivity returns.
+const BACK_TOAST_MS = 3000
+let backToastTimer: ReturnType<typeof setTimeout> | undefined
+watch(
+  () => sync.backOnline,
+  (back) => {
+    if (!back) return
+    clearTimeout(backToastTimer)
+    backToastTimer = setTimeout(() => sync.acknowledgeBackOnline(), BACK_TOAST_MS)
   },
 )
 
@@ -47,6 +62,28 @@ function logout(): void {
         Salir
       </button>
     </header>
+
+    <!-- Offline state lives under the header, ALWAYS honest (design decision 8). -->
+    <div
+      v-if="auth.isAuthenticated && !sync.online"
+      role="status"
+      class="mx-auto w-full max-w-[640px] px-5"
+    >
+      <div class="flex items-center gap-2 rounded-lg border border-white/10 bg-surface px-3.5 py-2.5 text-sm text-muted">
+        <WifiOff class="size-4 shrink-0 text-muted" aria-hidden="true" />
+        <span>Sin conexión — tus cambios se guardan en este dispositivo y suben al volver.</span>
+      </div>
+    </div>
+
+    <div
+      v-else-if="auth.isAuthenticated && sync.backOnline"
+      role="status"
+      class="mx-auto w-full max-w-[640px] px-5"
+    >
+      <div class="flex items-center gap-2 rounded-lg border border-primary-bright/30 bg-surface px-3.5 py-2.5 text-sm text-text">
+        <span class="text-primary-bright">De vuelta — sincronizado.</span>
+      </div>
+    </div>
 
     <main class="mx-auto w-full max-w-[640px] flex-1 px-5" :class="auth.isAuthenticated ? 'pb-24' : 'pb-10'">
       <slot />

@@ -1,4 +1,5 @@
 /// <reference types="vite/client" />
+/// <reference types="vite-plugin-pwa/client" />
 
 interface ImportMetaEnv {
   /** API base URL. Default "/api/v1" (Vite dev proxy → localhost:8080). */

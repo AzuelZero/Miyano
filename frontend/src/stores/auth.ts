@@ -7,6 +7,19 @@ import type { TokenPair } from '../types'
 const ACCESS_KEY = 'miyano.access'
 const REFRESH_KEY = 'miyano.refresh'
 
+/** Reads the `sub` claim without verifying the signature (server does that
+ * on every request) — identifies the owner of the offline mirrors. */
+function jwtSub(token: string): string | null {
+  try {
+    const payload = JSON.parse(
+      atob(token.split('.')[1]!.replace(/-/g, '+').replace(/_/g, '/')),
+    ) as { sub?: string }
+    return payload.sub ?? null
+  } catch {
+    return null
+  }
+}
+
 /**
  * Session state (Pinia). Server data lives in TanStack Query instead —
  * never duplicate server state here (see add-frontend-scaffold design #5).
@@ -18,12 +31,17 @@ export const useAuthStore = defineStore('auth', () => {
   const accessToken = ref<string | null>(localStorage.getItem(ACCESS_KEY))
   const refreshToken = ref<string | null>(localStorage.getItem(REFRESH_KEY))
   const isAuthenticated = computed(() => accessToken.value !== null)
+  /** Owner id for the offline mirrors (sub claim of the access token). */
+  const userId = computed(() => (accessToken.value ? jwtSub(accessToken.value) : null))
 
   function persist(pair: TokenPair): void {
     accessToken.value = pair.access_token
     refreshToken.value = pair.refresh_token
     localStorage.setItem(ACCESS_KEY, pair.access_token)
     localStorage.setItem(REFRESH_KEY, pair.refresh_token)
+    // Protect the mirrors from storage eviction pressure (D2; Safari's 7-day
+    // ITP cap needs a Home Screen install instead — documented risk).
+    void navigator.storage?.persist?.().catch(() => {})
   }
 
   function clear(): void {
@@ -71,5 +89,5 @@ export const useAuthStore = defineStore('auth', () => {
   // Bind this store into the api client (breaks the circular dependency).
   bindAuth(() => accessToken.value, tryRefresh)
 
-  return { accessToken, refreshToken, isAuthenticated, login, register, logout, tryRefresh }
+  return { accessToken, refreshToken, isAuthenticated, userId, login, register, logout, tryRefresh }
 })
