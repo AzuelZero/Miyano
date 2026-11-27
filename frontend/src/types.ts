@@ -49,6 +49,8 @@ export interface RoutineSummary {
   name: string
   description?: string | null
   tags: string[]
+  /** Per-row version for conditioned writes (sync D1, If-Match). */
+  revision: number
   exercise_count: number
   total_time_s: number
 }
@@ -58,6 +60,8 @@ export interface RoutineDetail {
   name: string
   description?: string | null
   tags: string[]
+  /** Per-row version for conditioned writes (sync D1, If-Match). */
+  revision: number
   exercises: RoutineExercise[]
   level: FitnessLevel
   scaled_exercises: RoutineExercise[]
